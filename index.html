@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schlaf-Tracker</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: white;
+      color: black;
+      margin: 20px;
+      text-align: center;
+    }
+    input {
+      padding: 5px;
+      margin: 5px;
+      width: 120px;
+      font-size: 16px;
+    }
+    button {
+      padding: 6px 12px;
+      margin-top: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    canvas {
+      max-width: 100%;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Schlaf-Tracker</h1>
+
+  <div>
+    <input type="number" id="sleepHours" placeholder="Stunden" step="0.1" />
+    <input type="number" id="alertness" placeholder="Wachheit (1–10)" min="1" max="10" />
+    <button id="saveBtn">Speichern</button>
+  </div>
+
+  <canvas id="chart"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const sleepInput = document.getElementById("sleepHours");
+    const alertInput = document.getElementById("alertness");
+    const saveBtn = document.getElementById("saveBtn");
+    const ctx = document.getElementById("chart").getContext("2d");
+
+    let data = JSON.parse(localStorage.getItem("sleepData") || "[]");
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [
+          {
+            label: "Schlafdauer (Stunden)",
+            data: data.map(d => d.sleep),
+            borderColor: "black",
+            borderWidth: 2,
+            fill: false,
+          },
+          {
+            label: "Wachheit (1–10)",
+            data: data.map(d => d.alert),
+            borderColor: "gray",
+            borderWidth: 2,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true },
+        },
+      },
+    });
+
+    saveBtn.addEventListener("click", () => {
+      const sleep = parseFloat(sleepInput.value);
+      const alert = parseFloat(alertInput.value);
+      if (isNaN(sleep) || isNaN(alert)) return alert("Bitte beide Felder ausfüllen!");
+
+      const entry = {
+        date: new Date().toLocaleDateString("de-DE"),
+        sleep,
+        alert,
+      };
+
+      data.push(entry);
+      localStorage.setItem("sleepData", JSON.stringify(data));
+
+      chart.data.labels.push(entry.date);
+      chart.data.datasets[0].data.push(entry.sleep);
+      chart.data.datasets[1].data.push(entry.alert);
+      chart.update();
+
+      sleepInput.value = "";
+      alertInput.value = "";
+    });
+  </script>
+</body>
+</html>
