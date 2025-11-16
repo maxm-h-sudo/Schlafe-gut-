@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Schlaf-Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background: #fff; color: #000; margin: 20px; }
+  h1 { text-align: center; margin-bottom: 40px; }
+  h2 { margin-top: 40px; }
+  .section { margin-bottom: 30px; }
+  label { display: inline-block; width: 220px; margin-bottom: 8px; }
+  input[type="number"], input[type="time"], select { width: 120px; }
+  canvas { margin-top: 20px; background: #fafafa; padding: 10px; border: 1px solid #ddd; }
+  button { padding: 8px 15px; margin-top: 15px; font-size: 16px; }
+</style>
+</head>
+<body>
+
+<h1>Schlaf-Tracker</h1>
+
+<!-- Datum -->
+<div class="section">
+  <h2>Datum</h2>
+  <input type="date" id="entryDate">
+</div>
+
+<!-- Schlafzeiten -->
+<div class="section">
+  <h2>Schlafzeiten</h2>
+  <label>Einschlafzeit:</label><input type="time" id="sleepTime"><br>
+  <label>Aufstehzeit:</label><input type="time" id="wakeTime"><br>
+</div>
+
+<!-- Aufwachmomente -->
+<div class="section">
+  <h2>Aufwachmomente (1–10)</h2>
+  <input type="number" id="wakeCount" min="0" max="10">
+</div>
+
+<!-- Energie -->
+<div class="section">
+  <h2>Energielevel (1–10)</h2>
+  <label>Gesamtenergie:</label><input type="number" id="energyTotal" min="1" max="10"><br>
+  <label>Energie Schule:</label><input type="number" id="energySchool" min="1" max="10"><br>
+  <label>Energie Zuhause:</label><input type="number" id="energyHome" min="1" max="10"><br>
+</div>
+
+<!-- Lifestyle -->
+<div class="section">
+  <h2>Lifestyle-Faktoren</h2>
+  <label>Koffein:</label>
+  <select id="caffeine"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+  <label>Alkohol:</label>
+  <select id="alcohol"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+  <label>Sport:</label>
+  <select id="sport"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+  <label>Handy < 60min vorher:</label>
+  <select id="phone"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+  <label>Letzte Mahlzeit (Minuten vorher):</label>
+  <input type="number" id="mealMinutes" min="0"><br>
+
+  <label>Stress:</label>
+  <select id="stress"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+</div>
+
+<!-- Kalorien & Gewicht -->
+<div class="section">
+  <h2>Kalorien & Gewicht</h2>
+  <label>Kalorien:</label><input type="number" id="calories" min="0"><br>
+  <label>Gewicht (kg):</label><input type="number" id="weight" min="0"><br>
+</div>
+
+<button onclick="saveData()">Speichern</button>
+
+<!-- ------------------ DIAGRAMME ------------------ -->
+
+<h2>Schlafdauer & Aufwachmomente</h2>
+<canvas id="sleepChart"></canvas>
+
+<h2>Energieverlauf</h2>
+<canvas id="energyChart"></canvas>
+
+<h2>Lifestyle-Faktoren (Rot/Grün)</h2>
+<canvas id="lifestyleChart"></canvas>
+
+<h2>Kalorien & Gewicht</h2>
+<canvas id="caloriesChart"></canvas>
+
+<script>
+let storage = JSON.parse(localStorage.getItem("sleepTracker")) || {};
+let charts = {};
+
+// Datum automatisch setzen
+document.getElementById('entryDate').value = new Date().toISOString().split("T")[0];
+
+function saveData() {
+    const d = document.getElementById("entryDate").value;
+
+    storage[d] = {
+        sleep: document.getElementById("sleepTime").value,
+        wake: document.getElementById("wakeTime").value,
+        wakeCount: Number(document.getElementById("wakeCount").value),
+        energyTotal: Number(document.getElementById("energyTotal").value),
+        energySchool: Number(document.getElementById("energySchool").value),
+        energyHome: Number(document.getElementById("energyHome").value),
+        caffeine: document.getElementById("caffeine").value,
+        alcohol: document.getElementById("alcohol").value,
+        sport: document.getElementById("sport").value,
+        phone: document.getElementById("phone").value,
+        mealMinutes: Number(document.getElementById("mealMinutes").value),
+        stress: document.getElementById("stress").value,
+        calories: Number(document.getElementById("calories").value),
+        weight: Number(document.getElementById("weight").value)
+    };
+
+    localStorage.setItem("sleepTracker", JSON.stringify(storage));
+    loadCharts();
+}
+
+function calcSleep(s,w){
+    if(!s || !w) return 0;
+    let [sh, sm] = s.split(":").map(Number);
+    let [wh, wm] = w.split(":").map(Number);
+    let diff = (wh*60+wm) - (sh*60+sm);
+    if(diff < 0) diff += 1440;
+    return diff / 60;
+}
+
+function destroyOld(id){
+    if(charts[id]) charts[id].destroy();
+}
+
+function loadCharts() {
+    let dates = Object.keys(storage).sort();
+
+    let sleepDur = dates.map(d => calcSleep(storage[d].sleep, storage[d].wake));
+    let wakeCnt = dates.map(d => storage[d].wakeCount);
+
+    destroyOld("sleepChart");
+    charts.sleepChart = new Chart(document.getElementById("sleepChart"), {
+        type: "line",
+        data: {
+            labels: dates,
+            datasets: [
+                { label: "Schlafdauer (h)", data: sleepDur, borderColor: "green", fill: false },
+                { label: "Aufwachmomente", data: wakeCnt, borderColor: "red", fill: false }
+            ]
+        }
+    });
+
+    let eTotal = dates.map(d => storage[d].energyTotal);
+    let eSchool = dates.map(d => storage[d].energySchool);
+    let eHome = dates.map(d => storage[d].energyHome);
+
+    destroyOld("energyChart");
+    charts.energyChart = new Chart(document.getElementById("energyChart"), {
+        type: "line",
+        data: {
+            labels: dates,
+            datasets: [
+                { label: "Gesamtenergie", data: eTotal, borderColor: "green", fill: false },
+                { label: "Energie Schule", data: eSchool, borderColor: "blue", fill: false },
+                { label: "Energie Zuhause", data: eHome, borderColor: "purple", fill: false }
+            ]
+        }
+    });
+
+    let green = 0, red = 0;
+
+    dates.forEach(d => {
+        let data = storage[d];
+        ["caffeine","alcohol","sport","phone","stress"].forEach(f=>{
+            if(data[f] === "yes") green++; else red++;
+        });
+        if(data.mealMinutes >= 180) green++; else red++;
+    });
+
+    destroyOld("lifestyleChart");
+    charts.lifestyleChart = new Chart(document.getElementById("lifestyleChart"), {
+        type: "pie",
+        data: {
+            labels: ["Gut (Grün)", "Schlecht (Rot)"],
+            datasets: [{ data: [green, red], backgroundColor: ["green", "red"] }]
+        }
+    });
+
+    let calories = dates.map(d => storage[d].calories);
+    let weight = dates.map(d => storage[d].weight);
+
+    destroyOld("caloriesChart");
+    charts.caloriesChart = new Chart(document.getElementById("caloriesChart"), {
+        type: "line",
+        data: {
+            labels: dates,
+            datasets: [
+                { label: "Kalorien", data: calories, borderColor: "red", fill: false },
+                { label: "Gewicht (kg)", data: weight, borderColor: "gray", fill: false }
+            ]
+        }
+    });
+}
+
+loadCharts();
+</script>
+
+</body>
+</html>
