@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Schlaf- & Lifestyle-Tracker — Final</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{--max-width:900px}
+  body{font-family:Inter,Arial,Helvetica,sans-serif;margin:18px;color:#000;background:#fff}
+  h1{text-align:center;margin-bottom:8px}
+  .layout{max-width:var(--max-width);margin:0 auto}
+  .section{padding:12px 0;border-bottom:1px solid #eee}
+  label{display:inline-block;width:220px;margin-bottom:8px}
+  input[type="number"], input[type="time"], input[type="date"], select{width:140px;padding:6px}
+  button{padding:8px 12px;margin-right:8px}
+  canvas{display:block;background:#fff;border:1px solid #eee;padding:8px;margin-top:8px;max-width:100%}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .top-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .small{font-size:13px;color:#555}
+  .muted{color:#666;font-size:13px}
+  @media (max-width:640px){
+    label{display:block;width:auto}
+    input[type="number"], input[type="time"], input[type="date"], select{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <h1>Schlaf- & Lifestyle-Tracker</h1>
+
+  <!-- TOP: Datum + Zeitfilter -->
+  <div class="section top-row">
+    <div>
+      <label for="entryDate">Datum</label>
+      <input id="entryDate" type="date">
+    </div>
+
+    <div class="controls">
+      <span class="small">Zeitraum:</span>
+      <button onclick="setFilter(7)">Letzte 7 Tage</button>
+      <button onclick="setFilter(30)">Letzte 30 Tage</button>
+      <button onclick="setFilter(365)">Letzte 12 Monate</button>
+      <button onclick="setFilter('all')">Alles</button>
+    </div>
+  </div>
+
+  <!-- Schlafzeiten -->
+  <div class="section">
+    <h2>Schlafzeiten</h2>
+    <label>Einschlafzeit</label><input id="sleepTime" type="time"><br>
+    <label>Aufstehzeit</label><input id="wakeTime" type="time"><br>
+    <div class="small">Die Schlafdauer wird automatisch aus Einschlaf- und Aufstehzeit berechnet.</div>
+  </div>
+
+  <!-- Aufwachmomente -->
+  <div class="section">
+    <h2>Aufwachmomente</h2>
+    <label>Anzahl / Intensität (0–10)</label>
+    <input id="wakeCount" type="number" min="0" max="10" step="1">
+    <div class="muted">0 = nicht aufgewacht, 10 = sehr häufig/ schlimm</div>
+  </div>
+
+  <!-- Energie -->
+  <div class="section">
+    <h2>Energielevel (1–10)</h2>
+    <label>Wachheitsgefühl</label><input id="alertness" type="number" min="1" max="10"><br>
+    <label>Energie (Schule)</label><input id="energySchool" type="number" min="1" max="10"><br>
+    <label>Energie (Zuhause)</label><input id="energyHome" type="number" min="1" max="10"><br>
+  </div>
+
+  <!-- Lifestyle -->
+  <div class="section">
+    <h2>Lifestyle-Faktoren</h2>
+    <div class="small">Alle Ja = positiv (grün), Nein = negativ (rot). Regeln: <strong>Phone ≥ 60 min</strong> = grün, <strong>meal ≥ 180 min</strong> = grün. Koffein/Alkohol/Stress = Ja → negativ.</div>
+    <div style="margin-top:8px;">
+      <label>Koffein konsumiert?</label>
+      <select id="caffeine"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+      <label>Alkohol konsumiert?</label>
+      <select id="alcohol"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+      <label>Sport gemacht?</label>
+      <select id="sport"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+      <label>Handy-Minuten vor Schlaf</label>
+      <input id="phoneMinutes" type="number" min="0" placeholder="Minuten"><span class="small"> (grün ≥ 60)</span><br>
+
+      <label>Letzte Mahlzeit vor Schlaf (Minuten)</label>
+      <input id="mealMinutes" type="number" min="0" placeholder="Minuten"><span class="small"> (grün ≥ 180)</span><br>
+
+      <label>Frische Luft bekommen?</label>
+      <select id="freshAir"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+
+      <label>Stress?</label>
+      <select id="stress"><option value="yes">Ja</option><option value="no">Nein</option></select><br>
+    </div>
+  </div>
+
+  <!-- Kalorien & Gewicht -->
+  <div class="section">
+    <h2>Kalorien & Gewicht</h2>
+    <label>Kalorien (kcal)</label><input id="calories" type="number" min="0" placeholder="z. B. 2300"><br>
+    <label>Gewicht (kg)</label><input id="weight" type="number" min="0" step="0.1" placeholder="z. B. 75.2"><br>
+  </div>
+
+  <!-- Actions -->
+  <div class="section">
+    <button onclick="saveEntry()">Speichern</button>
+    <button onclick="clearAll()">Alles löschen</button>
+    <span class="small">Gespeichert wird lokal in deinem Browser (localStorage).</span>
+  </div>
+
+  <!-- Charts -->
+  <div class="section">
+    <h2>Schlafdauer & Aufwachmomente</h2>
+    <canvas id="chartSleep" height="150"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Energieverlauf</h2>
+    <canvas id="chartEnergy" height="150"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Lifestyle (pro Datum: Säule 100% — Grün oben, Rot unten)</h2>
+    <canvas id="chartLifestyle" height="150"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Einschlaf- & Aufstehzeit - Abweichung (%)</h2>
+    <canvas id="chartDeviation" height="150"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Kalorien & Gewicht</h2>
+    <canvas id="chartCalories" height="150"></canvas>
+  </div>
+
+  <div class="section muted">
+    <strong>Legende / Regeln (kurz)</strong>
+    <ul>
+      <li>Sport = Ja → positiv (grün)</li>
+      <li>Frische Luft = Ja → positiv (grün)</li>
+      <li>Phone-Minuten ≥ 60 → positiv (grün), sonst negativ (rot)</li>
+      <li>Letzte Mahlzeit ≥ 180 Minuten → positiv (grün), sonst negativ (rot)</li>
+      <li>Koffein/Alkohol/Stress = Ja → negativ (rot)</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+/* Final, cleaned version
+   - Local storage key
+   - All features from conversation
+   - Lifestyle stacked 100% bars (green top, red bottom)
+   - Time filters for all charts
+*/
+
+const STORAGE_KEY = 'sleepTracker_final_v1';
+let store = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+let filter = 'all'; // 7,30,365,'all'
+
+// set today as default date
+document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
+
+// helpers
+function saveStore(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }
+function parseN(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+
+// compute sleep hours (handles overnight)
+function sleepHours(sleep, wake){
+  if(!sleep || !wake) return null;
+  const [sh, sm] = sleep.split(':').map(Number);
+  const [wh, wm] = wake.split(':').map(Number);
+  let diff = (wh*60 + wm) - (sh*60 + sm);
+  if(diff < 0) diff += 1440;
+  return +(diff/60).toFixed(2);
+}
+
+// save entry from form
+function saveEntry(){
+  const d = document.getElementById('entryDate').value;
+  if(!d){ alert('Bitte Datum wählen.'); return; }
+  store[d] = {
+    sleepTime: document.getElementById('sleepTime').value || null,
+    wakeTime: document.getElementById('wakeTime').value || null,
+    wakeCount: parseN(document.getElementById('wakeCount').value),
+    alertness: parseN(document.getElementById('alertness').value),
+    energySchool: parseN(document.getElementById('energySchool').value),
+    energyHome: parseN(document.getElementById('energyHome').value),
+    caffeine: document.getElementById('caffeine').value === 'yes',
+    alcohol: document.getElementById('alcohol').value === 'yes',
+    sport: document.getElementById('sport').value === 'yes',
+    phoneMinutes: parseN(document.getElementById('phoneMinutes').value),
+    mealMinutes: parseN(document.getElementById('mealMinutes').value),
+    freshAir: document.getElementById('freshAir').value === 'yes',
+    stress: document.getElementById('stress').value === 'yes',
+    calories: parseN(document.getElementById('calories').value),
+    weight: parseN(document.getElementById('weight').value)
+  };
+  saveStore();
+  loadCharts();
+  alert('Eintrag gespeichert.');
+}
+
+// clear all data
+function clearAll(){
+  if(!confirm('Alle lokal gespeicherten Daten löschen?')) return;
+  store = {};
+  saveStore();
+  loadCharts();
+}
+
+// filter helper
+function getEntries(){
+  const keys = Object.keys(store).sort();
+  if(filter === 'all') return keys.map(k => ({date:k, ...store[k]}));
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (Number(filter)-1));
+  return keys.filter(k => new Date(k) >= cutoff).map(k => ({date:k, ...store[k]}));
+}
+function setFilter(days){ filter = days; loadCharts(); }
+
+// Chart instances
+let cSleep, cEnergy, cLifestyle, cDeviation, cCalories;
+
+function loadCharts(){
+  const entries = getEntries();
+  const dates = entries.map(e => e.date);
+
+  // Schlafdauer & Aufwachmomente
+  const sleepData = entries.map(e => sleepHours(e.sleepTime, e.wakeTime));
+  const wakeData = entries.map(e => e.wakeCount != null ? e.wakeCount : null);
+
+  if(cSleep) cSleep.destroy();
+  cSleep = new Chart(document.getElementById('chartSleep'), {
+    type:'line',
+    data:{ labels:dates, datasets:[
+      {label:'Schlafdauer (h)', data:sleepData, borderColor:'green', spanGaps:true, tension:0.2},
+      {label:'Aufwachmomente (0-10)', data:wakeData, borderColor:'red', spanGaps:true, tension:0.2}
+    ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, scales:{ y:{ beginAtZero:true } } }
+  });
+
+  // Energieverlauf
+  const alertness = entries.map(e => e.alertness != null ? e.alertness : null);
+  const energySchool = entries.map(e => e.energySchool != null ? e.energySchool : null);
+  const energyHome = entries.map(e => e.energyHome != null ? e.energyHome : null);
+
+  if(cEnergy) cEnergy.destroy();
+  cEnergy = new Chart(document.getElementById('chartEnergy'), {
+    type:'line',
+    data:{ labels:dates, datasets:[
+      {label:'Wachheit (1-10)', data:alertness, borderColor:'black', spanGaps:true, tension:0.2},
+      {label:'Energie Schule (1-10)', data:energySchool, borderColor:'gray', spanGaps:true, tension:0.2},
+      {label:'Energie Zuhause (1-10)', data:energyHome, borderColor:'#444', spanGaps:true, tension:0.2}
+    ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, scales:{ y:{ beginAtZero:true, max:10 } } }
+  });
+
+  // Lifestyle stacked 100% bars per date
+  // For each date compute greenCount and redCount (total 7)
+  const totalFactors = 7;
+  const greenPerc = [];
+  const redPerc = [];
+
+  entries.forEach(e => {
+    let green = 0, red = 0;
+    // sport
+    if(e.sport) green++; else red++;
+    // freshAir
+    if(e.freshAir) green++; else red++;
+    // mealMinutes
+    if(e.mealMinutes != null && e.mealMinutes >= 180) green++; else red++;
+    // phoneMinutes
+    if(e.phoneMinutes != null && e.phoneMinutes >= 60) green++; else red++;
+    // caffeine (consumed -> negative)
+    if(e.caffeine) red++; else green++;
+    // alcohol
+    if(e.alcohol) red++; else green++;
+    // stress
+    if(e.stress) red++; else green++;
+
+    // If some fields missing, treat missing as red (conservative)
+    const sum = green + red;
+    if(sum !== totalFactors){
+      const diff = totalFactors - sum;
+      red += diff;
+    }
+    greenPerc.push(Math.round(green/totalFactors*100));
+    redPerc.push(Math.round(red/totalFactors*100));
+  });
+
+  if(cLifestyle) cLifestyle.destroy();
+  cLifestyle = new Chart(document.getElementById('chartLifestyle'), {
+    type:'bar',
+    data:{
+      labels:dates,
+      datasets:[
+        { label:'Schlecht (rot)', data:redPerc, backgroundColor:'red', stack:'a' },
+        { label:'Gut (grün)', data:greenPerc, backgroundColor:'green', stack:'a' }
+      ]
+    },
+    options:{
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      scales:{ x:{ stacked:true }, y:{ stacked:true, beginAtZero:true, max:100, ticks:{ callback: v => v + '%' } } },
+      plugins:{ tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + '%' } } }
+    }
+  });
+
+  // Einschlaf-/Aufstehzeit-Abweichung in %
+  const sleepMinutes = entries.map(e => e.sleepTime ? (Number(e.sleepTime.split(':')[0])*60 + Number(e.sleepTime.split(':')[1])) : null);
+  const wakeMinutes = entries.map(e => e.wakeTime ? (Number(e.wakeTime.split(':')[0])*60 + Number(e.wakeTime.split(':')[1])) : null);
+  const validSleep = sleepMinutes.filter(v=>v!=null);
+  const validWake = wakeMinutes.filter(v=>v!=null);
+  const avgSleep = validSleep.length ? validSleep.reduce((a,b)=>a+b,0)/validSleep.length : null;
+  const avgWake = validWake.length ? validWake.reduce((a,b)=>a+b,0)/validWake.length : null;
+  const sleepDev = sleepMinutes.map(v => v!=null && avgSleep!=null ? +(Math.abs(v-avgSleep)/1440*100).toFixed(2) : null);
+  const wakeDev = wakeMinutes.map(v => v!=null && avgWake!=null ? +(Math.abs(v-avgWake)/1440*100).toFixed(2) : null);
+
+  if(cDeviation) cDeviation.destroy();
+  cDeviation = new Chart(document.getElementById('chartDeviation'), {
+    type:'line',
+    data:{ labels:dates, datasets:[
+      { label:'Einschlafzeit-Abweichung %', data: sleepDev, borderColor:'black', spanGaps:true, tension:0.2 },
+      { label:'Aufstehzeit-Abweichung %', data: wakeDev, borderColor:'gray', spanGaps:true, tension:0.2 }
+    ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, scales:{ y:{ beginAtZero:true, ticks:{ callback: v => v + '%' } } } }
+  });
+
+  // Kalorien & Gewicht (two axes)
+  const calories = entries.map(e => e.calories != null ? e.calories : null);
+  const weights = entries.map(e => e.weight != null ? e.weight : null);
+
+  if(cCalories) cCalories.destroy();
+  cCalories = new Chart(document.getElementById('chartCalories'), {
+    type:'line',
+    data:{ labels:dates, datasets:[
+      { label:'Kalorien (kcal)', data: calories, borderColor:'black', yAxisID:'left', spanGaps:true, tension:0.2 },
+      { label:'Gewicht (kg)', data: weights, borderColor:'gray', yAxisID:'right', spanGaps:true, tension:0.2 }
+    ]},
+    options:{
+      responsive:true, interaction:{mode:'index',intersect:false},
+      scales:{
+        left:{ type:'linear', position:'left', title:{display:true,text:'Kalorien'} },
+        right:{ type:'linear', position:'right', title:{display:true,text:'Gewicht (kg)'} }
+      }
+    }
+  });
+}
+
+// load initial chart state
+loadCharts();
+
+// when date input changes, populate form if entry exists
+document.getElementById('entryDate').addEventListener('change', function(){
+  const d = this.value;
+  if(store[d]){
+    const e = store[d];
+    document.getElementById('sleepTime').value = e.sleepTime || '';
+    document.getElementById('wakeTime').value = e.wakeTime || '';
+    document.getElementById('wakeCount').value = e.wakeCount ?? '';
+    document.getElementById('alertness').value = e.alertness ?? '';
+    document.getElementById('energySchool').value = e.energySchool ?? '';
+    document.getElementById('energyHome').value = e.energyHome ?? '';
+    document.getElementById('caffeine').value = e.caffeine ? 'yes' : 'no';
+    document.getElementById('alcohol').value = e.alcohol ? 'yes' : 'no';
+    document.getElementById('sport').value = e.sport ? 'yes' : 'no';
+    document.getElementById('phoneMinutes').value = e.phoneMinutes != null ? e.phoneMinutes : '';
+    document.getElementById('mealMinutes').value = e.mealMinutes != null ? e.mealMinutes : '';
+    document.getElementById('freshAir').value = e.freshAir ? 'yes' : 'no';
+    document.getElementById('stress').value = e.stress ? 'yes' : 'no';
+    document.getElementById('calories').value = e.calories != null ? e.calories : '';
+    document.getElementById('weight').value = e.weight != null ? e.weight : '';
+    // set wakeCount etc.
+  } else {
+    // clear inputs (except date)
+    ['sleepTime','wakeTime','wakeCount','alertness','energySchool','energyHome','phoneMinutes','mealMinutes','calories','weight'].forEach(id => document.getElementById(id).value = '');
+    ['caffeine','alcohol','sport','freshAir','stress'].forEach(id => document.getElementById(id).value = 'no');
+  }
+});
+
+// expose functions globally for buttons
+window.saveEntry = saveEntry;
+window.clearAll = clearAll;
+window.setFilter = setFilter;
+window.loadCharts = loadCharts;
+</script>
+</body>
+</html>
